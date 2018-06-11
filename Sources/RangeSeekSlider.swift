@@ -47,6 +47,13 @@ import UIKit
             refresh()
         }
     }
+    
+    /// The cursor value to select
+    @IBInspectable open var cursorValue: CGFloat = 0.0 {
+        didSet {
+            refresh()
+        }
+    }
 
     /// The preselected minumum value
     /// (note: This should be less than the selectedMaxValue)
@@ -131,6 +138,10 @@ import UIKit
     /// Handle slider with custom color, you can set custom color for your handle
     @IBInspectable open var handleColor: UIColor?
 
+    //TODO: Finish implementation
+    /// Selected handle slider with custom color
+    @IBInspectable open var selectedHandleColor: UIColor?
+    
     /// Handle slider with custom border color, you can set custom border color for your handle
     @IBInspectable open var handleBorderColor: UIColor?
 
@@ -193,6 +204,20 @@ import UIKit
             updateLineHeight()
         }
     }
+    
+    /// Set the cursor height (default 0.0)
+    @IBInspectable open var cursorHandleHeight: CGFloat = 0.0 {
+        didSet {
+            updateCursorHandleFrame()
+        }
+    }
+    
+    /// Set the cursor width (default 3.0)
+    @IBInspectable open var cursorHandleWidth: CGFloat = 3.0 {
+        didSet {
+            updateCursorHandleFrame()
+        }
+    }
 
     /// Handle border width (default 0.0)
     @IBInspectable open var handleBorderWidth: CGFloat = 0.0 {
@@ -224,7 +249,7 @@ import UIKit
 
     // MARK: - private stored properties
 
-    private enum HandleTracking { case none, left, right }
+    private enum HandleTracking { case none, left, right, cursor }
     private var handleTracking: HandleTracking = .none
 
     private let sliderLine: CALayer = CALayer()
@@ -232,7 +257,9 @@ import UIKit
 
     private let leftHandle: CALayer = CALayer()
     private let rightHandle: CALayer = CALayer()
-
+    private let cursorHandle: CALayer = CALayer()
+    
+    
     fileprivate let minLabel: CATextLayer = CATextLayer()
     fileprivate let maxLabel: CATextLayer = CATextLayer()
 
@@ -299,22 +326,28 @@ import UIKit
         let insetExpansion: CGFloat = -30.0
         let isTouchingLeftHandle: Bool = leftHandle.frame.insetBy(dx: insetExpansion, dy: insetExpansion).contains(touchLocation)
         let isTouchingRightHandle: Bool = rightHandle.frame.insetBy(dx: insetExpansion, dy: insetExpansion).contains(touchLocation)
+        // #
+        let isTouchingCursor: Bool = cursorHandle.frame.insetBy(dx: insetExpansion, dy: insetExpansion).contains(touchLocation)
 
-        guard isTouchingLeftHandle || isTouchingRightHandle else { return false }
+        guard isTouchingLeftHandle || isTouchingRightHandle || isTouchingCursor else { return false }
 
 
         // the touch was inside one of the handles so we're definitely going to start movign one of them. But the handles might be quite close to each other, so now we need to find out which handle the touch was closest too, and activate that one.
         let distanceFromLeftHandle: CGFloat = touchLocation.distance(to: leftHandle.frame.center)
         let distanceFromRightHandle: CGFloat = touchLocation.distance(to: rightHandle.frame.center)
-
-        if distanceFromLeftHandle < distanceFromRightHandle && !disableRange {
+        let distanceFromCursor: CGFloat = touchLocation.distance(to: cursorHandle.frame.center)
+        
+        if distanceFromCursor < min(distanceFromLeftHandle, distanceFromRightHandle) {
+            handleTracking = .cursor
+        } else if distanceFromLeftHandle < distanceFromRightHandle && !disableRange {
             handleTracking = .left
         } else if selectedMaxValue == maxValue && leftHandle.frame.midX == rightHandle.frame.midX {
             handleTracking = .left
         } else {
             handleTracking = .right
         }
-        let handle: CALayer = (handleTracking == .left) ? leftHandle : rightHandle
+        let handle: CALayer = (handleTracking == .cursor) ? cursorHandle : (handleTracking == .left) ? leftHandle : rightHandle
+        // TODO: Figure out what this does
         animate(handle: handle, selected: true)
 
         delegate?.didStartTouches(in: self)
@@ -343,6 +376,10 @@ import UIKit
             } else {
                 selectedMaxValue = max(selectedValue, selectedMinValue)
             }
+        case .cursor:
+            cursorValue = min(max(selectedValue, selectedMinValue), selectedMaxValue)
+            break
+            
         case .none:
             // no need to refresh the view because it is done as a side-effect of setting the property
             break
@@ -354,7 +391,7 @@ import UIKit
     }
 
     open override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
-        let handle: CALayer = (handleTracking == .left) ? leftHandle : rightHandle
+        let handle: CALayer = (handleTracking == .cursor) ? cursorHandle : (handleTracking == .left) ? leftHandle : rightHandle
         animate(handle: handle, selected: false)
         handleTracking = .none
 
@@ -405,7 +442,13 @@ import UIKit
         rightHandle.cornerRadius = handleDiameter / 2.0
         rightHandle.borderWidth = handleBorderWidth
         layer.addSublayer(rightHandle)
-
+        
+        // draw the cursor
+        cursorHandle.backgroundColor = UIColor.yellow.cgColor
+        layer.addSublayer(cursorHandle)
+        cursorHandle.frame = CGRect(x: 0.0, y: 0.0, width: cursorHandleWidth, height: handleDiameter + cursorHandleHeight)
+        // #
+        
         let handleFrame: CGRect = CGRect(x: 0.0, y: 0.0, width: handleDiameter, height: handleDiameter)
         leftHandle.frame = handleFrame
         rightHandle.frame = handleFrame
@@ -470,6 +513,10 @@ import UIKit
                                   height: lineHeight)
         sliderLine.cornerRadius = lineHeight / 2.0
         sliderLineBetweenHandles.cornerRadius = sliderLine.cornerRadius
+    }
+    
+    private func updateCursorHandleFrame() {
+        cursorHandle.frame = CGRect(x: 0.0, y: 0.0, width: cursorHandleWidth, height: handleDiameter + cursorHandleHeight)
     }
 
     private func updateLabelValues() {
@@ -546,7 +593,14 @@ import UIKit
                                                 y: sliderLine.frame.minY,
                                                 width: rightHandle.position.x - leftHandle.position.x,
                                                 height: lineHeight)
+        
+        
+        
+        // #
+        cursorHandle.position = CGPoint(x: xPositionAlongLine(for: cursorValue),
+                                      y: sliderLine.frame.midY)
     }
+    
 
     private func updateLabelPositions() {
         // the center points for the labels are X = the same x position as the relevant handle. Y = the y position of the handle minus half the height of the text label, minus some padding.
@@ -618,8 +672,12 @@ import UIKit
             maxLabel.frame.origin.x = frame.width - maxLabel.frame.width
         }
     }
-
+    var isRefreshing: Bool = false
     fileprivate func refresh() {
+        
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        
         if enableStep && step > 0.0 {
             selectedMinValue = CGFloat(roundf(Float(selectedMinValue / step))) * step
             if let previousStepMinValue = previousStepMinValue, previousStepMinValue != selectedMinValue {
@@ -640,17 +698,28 @@ import UIKit
             switch handleTracking {
             case .left:
                 selectedMinValue = selectedMaxValue - minDistance
+//                cursorValue = min(max(cursorValue, selectedMinValue), selectedMaxValue)
             case .right:
                 selectedMaxValue = selectedMinValue + minDistance
+//                cursorValue = min(max(cursorValue, selectedMinValue), selectedMaxValue)
+            case .cursor:
+                //TODO: implement
+                break
             case .none:
                 break
             }
         } else if diff > maxDistance {
             switch handleTracking {
             case .left:
-                selectedMinValue = selectedMaxValue - maxDistance
-            case .right:
                 selectedMaxValue = selectedMinValue + maxDistance
+//                cursorValue = min(max(cursorValue, selectedMinValue), selectedMaxValue)
+            case .right:
+                selectedMinValue = selectedMaxValue - maxDistance
+//                cursorValue = min(max(cursorValue, selectedMinValue), selectedMaxValue)
+                break
+            case .cursor:
+                //TODO: implement
+                break
             case .none:
                 break
             }
@@ -659,11 +728,13 @@ import UIKit
         // ensure the minimum and maximum selected values are within range. Access the values directly so we don't cause this refresh method to be called again (otherwise changing the properties causes a refresh)
         if selectedMinValue < minValue {
             selectedMinValue = minValue
+//            cursorValue = min(max(cursorValue, selectedMinValue), selectedMaxValue)
         }
         if selectedMaxValue > maxValue {
             selectedMaxValue = maxValue
+//            cursorValue = min(max(cursorValue, selectedMinValue), selectedMaxValue)
         }
-
+        cursorValue = min(max(cursorValue, selectedMinValue), selectedMaxValue)
         // update the frames in a transaction so that the tracking doesn't continue until the frame has moved.
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -677,8 +748,9 @@ import UIKit
 
         // update the delegate
         if let delegate = delegate, handleTracking != .none {
-            delegate.rangeSeekSlider(self, didChange: selectedMinValue, maxValue: selectedMaxValue)
+            delegate.rangeSeekSlider(self, didChange: selectedMinValue, maxValue: selectedMaxValue, cursorValue: cursorValue)
         }
+        isRefreshing = false
     }
 
     private func animate(handle: CALayer, selected: Bool) {
