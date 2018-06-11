@@ -189,9 +189,9 @@ import UIKit
     @IBInspectable open var handleDiameter: CGFloat = 16.0 {
         didSet {
             leftHandle.cornerRadius = handleDiameter / 2.0
-            rightHandle.cornerRadius = handleDiameter / 2.0
+//            rightHandle.cornerRadius = handleDiameter / 2.0
             leftHandle.frame = CGRect(x: 0.0, y: 0.0, width: handleDiameter, height: handleDiameter)
-            rightHandle.frame = CGRect(x: 0.0, y: 0.0, width: handleDiameter, height: handleDiameter)
+//            rightHandle.frame = CGRect(x: 0.0, y: 0.0, width: handleDiameter, height: handleDiameter)
         }
     }
 
@@ -256,7 +256,7 @@ import UIKit
     private let sliderLineBetweenHandles: CALayer = CALayer()
 
     private let leftHandle: CALayer = CALayer()
-    private let rightHandle: CALayer = CALayer()
+    private let rightHandle: CAShapeLayer = CAShapeLayer()
     private let cursorHandle: CALayer = CALayer()
     
     
@@ -439,9 +439,25 @@ import UIKit
         layer.addSublayer(leftHandle)
 
         // draw the maximum slider handle
-        rightHandle.cornerRadius = handleDiameter / 2.0
-        rightHandle.borderWidth = handleBorderWidth
-        layer.addSublayer(rightHandle)
+        func drawTriangle(size: CGFloat, x: CGFloat, y: CGFloat, up:Bool, triangleLayer: CAShapeLayer) {
+//            let triangleLayer = CAShapeLayer()
+            let trianglePath = UIBezierPath()
+            trianglePath.move(to: CGPoint(x: -4, y: 0.0))
+            trianglePath.addLine(to: CGPoint(x: up ? size : -size, y: -(size*0.75)))
+            trianglePath.addLine(to: CGPoint(x: up ? size : -size, y: (size*0.75)))
+            trianglePath.close()
+            triangleLayer.path = trianglePath.cgPath
+            triangleLayer.fillColor = handleColor?.cgColor ?? UIColor.white.cgColor
+            triangleLayer.anchorPoint = .zero
+            triangleLayer.position = CGPoint(x: x, y: y)
+            triangleLayer.name = "triangle"
+            layer.addSublayer(triangleLayer)
+        }
+
+        drawTriangle(size: 15, x: 0, y: 0, up: true, triangleLayer: rightHandle)
+//        rightHandle.cornerRadius = handleDiameter / 2.0
+//        rightHandle.borderWidth = handleBorderWidth
+//        layer.addSublayer(rightHandle)
         
         // draw the cursor
         cursorHandle.backgroundColor = UIColor.yellow.cgColor
@@ -451,7 +467,7 @@ import UIKit
         
         let handleFrame: CGRect = CGRect(x: 0.0, y: 0.0, width: handleDiameter, height: handleDiameter)
         leftHandle.frame = handleFrame
-        rightHandle.frame = handleFrame
+//        rightHandle.frame = handleFrame
 
         // draw the text labels
         let labelFontSize: CGFloat = 12.0
@@ -556,6 +572,7 @@ import UIKit
             leftHandle.backgroundColor = color
             leftHandle.borderColor = color
             rightHandle.backgroundColor = color
+            rightHandle.fillColor = color
             rightHandle.borderColor = color
         } else {
             let tintCGColor: CGColor = tintColor.cgColor
@@ -572,6 +589,7 @@ import UIKit
             }
             leftHandle.backgroundColor = color
             leftHandle.borderColor = handleBorderColor.map { $0.cgColor }
+            rightHandle.fillColor = color
             rightHandle.backgroundColor = color
             rightHandle.borderColor = handleBorderColor.map { $0.cgColor }
         }
